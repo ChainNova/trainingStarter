@@ -154,7 +154,7 @@ func (a *BillChaincode) issue(stub shim.ChaincodeStubInterface, args []string) p
 	}
 	// 更改票据信息和状态并保存票据:票据状态设为新发布
 	bill.State = BillInfo_State_NewPublish
-    // 保存票据
+	// 保存票据
 	_, bl := a.putBill(stub, bill)
 	if !bl {
 		res := getRetString(1,"ChainnovaChaincode Invoke issue put bill failed")
@@ -179,13 +179,36 @@ func (a *BillChaincode) endorse(stub shim.ChaincodeStubInterface, args []string)
 		res := getRetString(1,"ChainnovaChaincode Invoke endorse args<3")
 		return shim.Error(res)
 	}
-    // 根据票号取得票据
-	
-    // 更改票据信息和状态并保存票据: 添加待背书人信息,重制已拒绝背书人, 票据状态改为待背书
-	
-    // 保存票据
-	
+	// 根据票号取得票据
+	bill, bl := a.getBill(stub, args[0])
+	if !bl {
+		res := getRetString(1,"ChainnovaChaincode Invoke endorse get bill error")
+		return shim.Error(res)
+	}
+
+	if bill.HodrCmID == args[1] {
+		res := getRetString(1,"ChainnovaChaincode Invoke endorse failed: Endorser should not be same with current Holder")
+		return shim.Error(res)
+	}
+	// 更改票据信息和状态并保存票据: 添加待背书人信息,重制已拒绝背书人, 票据状态改为待背书
+	bill.WaitEndorserCmID = args[1]
+	bill.WaitEndorserAcct = args[2]
+	bill.RejectEndorserCmID = ""
+	bill.RejectEndorserAcct = ""
+	bill.State = BillInfo_State_EndrWaitSign
+	// 保存票据
+	_, bl = a.putBill(stub, bill)
+	if !bl {
+		res := getRetString(1,"ChainnovaChaincode Invoke endorse put bill failed")
+		return shim.Error(res)
+	}
 	// 以待背书人ID和票号构造复合key 向search表中保存 value为空即可 以便待背书人批量查询
+	holderNameBillNoIndexKey, err := stub.CreateCompositeKey(IndexName, []string{bill.WaitEndorserCmID, bill.BillInfoID})
+	if err != nil {
+		res := getRetString(1,"ChainnovaChaincode Invoke endorse put search table failed")
+		return shim.Error(res)
+	}
+	stub.PutState(holderNameBillNoIndexKey, []byte{0x00})
 
 	res := getRetByte(0,"invoke endorse success")
 	return shim.Success(res)
@@ -198,16 +221,33 @@ func (a *BillChaincode) accept(stub shim.ChaincodeStubInterface, args []string) 
 		res := getRetString(1,"ChainnovaChaincode Invoke accept args<3")
 		return shim.Error(res)
 	}
-    // 根据票号取得票据
-	
+	// 根据票号取得票据
+	bill, bl := a.getBill(stub, args[0])
+	if !bl {
+		res := getRetString(1,"ChainnovaChaincode Invoke accept get bill error")
+		return shim.Error(res)
+	}
 
-    // 维护search表: 以前手持票人ID和票号构造复合key 从search表中删除该key 以便前手持票人无法再查到该票据
-	
+	// 维护search表: 以前手持票人ID和票号构造复合key 从search表中删除该key 以便前手持票人无法再查到该票据
+	holderNameBillNoIndexKey, err := stub.CreateCompositeKey(IndexName, []string{bill.HodrCmID, bill.BillInfoID})
+	if err != nil {
+		res := getRetString(1,"ChainnovaChaincode Invoke accept put search table failed")
+		return shim.Error(res)
+	}
+	stub.DelState(holderNameBillNoIndexKey)
 
 	// 更改票据信息和状态并保存票据: 将前手持票人改为背书人,重置待背书人,票据状态改为背书签收
-	
-    // 保存票据
-
+	bill.HodrCmID = args[1]
+	bill.HodrAcct = args[2]
+	bill.WaitEndorserCmID = ""
+	bill.WaitEndorserAcct = ""
+	bill.State = BillInfo_State_EndrSigned
+	// 保存票据
+	_, bl = a.putBill(stub, bill)
+	if !bl {
+		res := getRetString(1,"ChainnovaChaincode Invoke accept put bill failed")
+		return shim.Error(res)
+	}
 
 	res := getRetByte(0,"invoke accept success")
 	return shim.Success(res)
@@ -220,7 +260,7 @@ func (a *BillChaincode) reject(stub shim.ChaincodeStubInterface, args []string) 
 		res := getRetString(1,"ChainnovaChaincode Invoke reject args<3")
 		return shim.Error(res)
 	}
-    // 根据票号取得票据
+	// 根据票号取得票据
 	bill, bl := a.getBill(stub, args[0])
 	if !bl {
 		res := getRetString(1,"ChainnovaChaincode Invoke reject get bill error")
@@ -241,7 +281,7 @@ func (a *BillChaincode) reject(stub shim.ChaincodeStubInterface, args []string) 
 	bill.RejectEndorserCmID = args[1]
 	bill.RejectEndorserAcct = args[2]
 	bill.State = BillInfo_State_EndrReject
-    // 保存票据
+	// 保存票据
 	_, bl = a.putBill(stub, bill)
 	if !bl {
 		res := getRetString(1,"ChainnovaChaincode Invoke reject put bill failed")
