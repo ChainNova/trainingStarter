@@ -11,14 +11,14 @@ A sample Node.js app to demonstrate **__fabric-client__** & **__fabric-ca-client
 * [Download Docker images](http://hyperledger-fabric.readthedocs.io/en/latest/samples.html#binaries)
 
 ```
-cd trainingProjects/billEndorse 
+cd trainingStarter/billEndorse 
 npm install
 npm install -g bower
 
-cd trainingProjects/billEndorse/public/ng
+cd trainingStarter/billEndorse/public/ng
 bower install
 
-cd trainingProjects/billEndorse 
+cd trainingStarter/billEndorse 
 ./setupFabricNetwork.sh
 ./createChannelAndInstallChaincode.sh
 ```
